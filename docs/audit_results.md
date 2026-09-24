@@ -58,3 +58,17 @@ More than half of acquired sellers never made a sale. Activation is analyzed as 
 - Channels with fewer than 10 active sellers are too small to test on their own, so they are pooled into "other." No budget recommendation is made for the pooled group.
 - "Unknown" stays separate: it is the third-largest group and has the highest conversion rate, so it is reported as a data-quality finding (untracked acquisition source).
 - Some sellers signed shortly before the order data ends, so part of the inactive group may be "not yet" rather than "never." Activation will be measured within a fixed window after signing.
+
+## 4. Observation window
+
+| Month (2018) | Orders |
+|---|---|
+| Jan to Aug | 6,167 to 7,269 per month |
+| Sep | 16 |
+| Oct | 4 |
+
+Order volume collapses after August 2018, so the effective end of the data is **August 31, 2018**.
+
+**Decision:** 90-day performance window. Only sellers who signed on or before June 2, 2018 are included (about 665 of 842). All outcomes (activation, revenue, reviews, delivery) are measured within each seller's first 90 days after signing, so every seller has an equal, complete window. Sellers who signed later are excluded rather than counted as inactive.
+
+**Data cleaning note:** 551 duplicate reviews were removed (one review kept per order, the most recent).
