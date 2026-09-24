@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: raw
+    database: workspace
+    schema: raw
+    tables:
+      - name: marketing_qualified_leads
+      - name: closed_deals
+      - name: orders
+      - name: order_items
+      - name: order_reviews
+      - name: sellers
+      - name: products
+      - name: product_category_translation
+      

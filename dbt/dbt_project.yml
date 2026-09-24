@@ -1,0 +1,19 @@
+name: olist_channel_performance
+version: "1.0.0"
+profile: olist_channel_performance
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  olist_channel_performance:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
