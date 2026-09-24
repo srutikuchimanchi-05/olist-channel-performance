@@ -6,6 +6,10 @@ model-paths: ["models"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
 
+vars:
+  data_end_date: "2018-08-31"
+  performance_window_days: 90
+
 models:
   olist_channel_performance:
     staging:
@@ -17,6 +21,3 @@ models:
     marts:
       +materialized: table
       +schema: marts
-    vars:
-      data_end_date: "2018-08-31"
-      performance_window_days: 90
