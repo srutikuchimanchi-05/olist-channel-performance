@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: fact_seller_channel_performance
+    description: "One row per acquired seller with a full 90-day window: acquisition channel plus 90-day outcomes."
+    columns:
+      - name: seller_id
+        data_tests:
+          - unique
+          - not_null
+      - name: channel_group
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['organic_search', 'paid_search', 'unknown',
+                         'direct_traffic', 'social', 'other']
+      - name: is_active_90d
+        data_tests:
+          - not_null
+      - name: revenue_90d
+        data_tests:
+          - not_null
+      - name: avg_review_score_90d
+        data_tests:
+          - not_null:
+              config:
+                where: "reviewed_orders_90d > 0"

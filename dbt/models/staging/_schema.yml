@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_leads
+    columns:
+      - name: mql_id
+        data_tests:
+          - unique
+          - not_null
+      - name: origin
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['organic_search', 'paid_search', 'social', 'unknown',
+                         'direct_traffic', 'email', 'referral', 'other',
+                         'display', 'other_publicities']
+
+  - name: stg_closed_deals
+    columns:
+      - name: seller_id
+        data_tests:
+          - unique
+          - not_null
+      - name: mql_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_leads')
+                field: mql_id
+
+  - name: stg_order_items
+    columns:
+      - name: seller_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_sellers')
+                field: seller_id
+
+  - name: stg_orders
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+
+  - name: stg_order_reviews
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+      - name: review_score
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+                quote: false
