@@ -1,0 +1,864 @@
+{
+  "datasets": [
+    {
+      "name": "f2026c14",
+      "displayName": "kpis",
+      "queryLines": [
+        "select\n",
+        "    count(*)                                                        as sellers,\n",
+        "    sum(case when is_active_90d then 1 else 0 end)                  as active_sellers,\n",
+        "    round(avg(case when is_active_90d then 1.0 else 0.0 end), 3)    as activation_rate,\n",
+        "    round(percentile(case when is_active_90d then revenue_90d end, 0.5), 2) as median_revenue_active\n",
+        "from workspace.marts.fact_seller_channel_performance"
+      ]
+    },
+    {
+      "name": "9122c946",
+      "displayName": "channel_activation",
+      "queryLines": [
+        "with base as (\n",
+        "    select\n",
+        "        channel_group,\n",
+        "        count(*)                                       as sellers,\n",
+        "        sum(case when is_active_90d then 1 else 0 end) as active\n",
+        "    from workspace.marts.fact_seller_channel_performance\n",
+        "    group by channel_group\n",
+        "),\n",
+        "\n",
+        "calc as (\n",
+        "    select *, active / sellers as p, 1.96 as z\n",
+        "    from base\n",
+        ")\n",
+        "\n",
+        "select\n",
+        "    channel_group,\n",
+        "    sellers,\n",
+        "    active,\n",
+        "    round(p, 3) as activation_rate,\n",
+        "    round((p + z*z/(2*sellers) - z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_low,\n",
+        "    round((p + z*z/(2*sellers) + z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_high\n",
+        "from calc\n",
+        "order by activation_rate desc"
+      ]
+    },
+    {
+      "name": "d2d593f4",
+      "displayName": "lead_type_activation",
+      "queryLines": [
+        "with base as (\n",
+        "    select\n",
+        "        coalesce(lead_type, 'unknown')                 as lead_type,\n",
+        "        count(*)                                       as sellers,\n",
+        "        sum(case when is_active_90d then 1 else 0 end) as active\n",
+        "    from workspace.marts.fact_seller_channel_performance\n",
+        "    group by 1\n",
+        "    having count(*) >= 20\n",
+        "),\n",
+        "\n",
+        "calc as (\n",
+        "    select *, active / sellers as p, 1.96 as z\n",
+        "    from base\n",
+        ")\n",
+        "\n",
+        "select\n",
+        "    lead_type,\n",
+        "    sellers,\n",
+        "    round(p, 3) as activation_rate,\n",
+        "    round((p + z*z/(2*sellers) - z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_low,\n",
+        "    round((p + z*z/(2*sellers) + z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_high\n",
+        "from calc\n",
+        "order by activation_rate desc"
+      ]
+    },
+    {
+      "name": "28072d23",
+      "displayName": "business_type_activation",
+      "queryLines": [
+        "with base as (\n",
+        "    select\n",
+        "        coalesce(business_type, 'unknown')             as business_type,\n",
+        "        count(*)                                       as sellers,\n",
+        "        sum(case when is_active_90d then 1 else 0 end) as active\n",
+        "    from workspace.marts.fact_seller_channel_performance\n",
+        "    group by 1\n",
+        "    having count(*) >= 20\n",
+        "),\n",
+        "\n",
+        "calc as (\n",
+        "    select *, active / sellers as p, 1.96 as z\n",
+        "    from base\n",
+        ")\n",
+        "\n",
+        "select\n",
+        "    business_type,\n",
+        "    sellers,\n",
+        "    round(p, 3) as activation_rate,\n",
+        "    round((p + z*z/(2*sellers) - z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_low,\n",
+        "    round((p + z*z/(2*sellers) + z*sqrt(p*(1-p)/sellers + z*z/(4*sellers*sellers))) / (1 + z*z/sellers), 3) as ci_high\n",
+        "from calc\n",
+        "order by activation_rate desc"
+      ]
+    },
+    {
+      "name": "f83149f2",
+      "displayName": "revenue_by_channel",
+      "queryLines": [
+        "select\n",
+        "    channel_group,\n",
+        "    count(*)                                 as active_sellers,\n",
+        "    round(percentile(revenue_90d, 0.5), 2)   as median_revenue,\n",
+        "    round(avg(revenue_90d), 2)               as mean_revenue\n",
+        "from workspace.marts.fact_seller_channel_performance\n",
+        "where is_active_90d\n",
+        "group by channel_group\n",
+        "order by median_revenue desc"
+      ]
+    },
+    {
+      "name": "d7fb643b",
+      "displayName": "break_even",
+      "queryLines": [
+        "with rates as (\n",
+        "    select\n",
+        "        avg(case when channel_group = 'paid_search'\n",
+        "                 then case when is_active_90d then 1.0 else 0.0 end end)    as paid_rate,\n",
+        "        avg(case when channel_group = 'organic_search'\n",
+        "                 then case when is_active_90d then 1.0 else 0.0 end end)    as organic_rate\n",
+        "    from workspace.marts.fact_seller_channel_performance\n",
+        "),\n",
+        "\n",
+        "premiums as (\n",
+        "    select explode(array(0.0, 0.2, 0.4, 0.6, 0.8)) as premium\n",
+        ")\n",
+        "\n",
+        "select\n",
+        "    concat(cast(round(premium * 100) as int), '%')             as paid_cost_premium,\n",
+        "    round((1 + premium) / (paid_rate / organic_rate), 2)       as paid_cost_per_active_vs_organic,\n",
+        "    case when (1 + premium) / (paid_rate / organic_rate) < 1\n",
+        "         then 'Paid search cheaper' else 'Organic cheaper' end as verdict\n",
+        "from rates\n",
+        "cross join premiums\n",
+        "order by premium"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "bc4bcad0",
+      "displayName": "Canvas",
+      "layout": [
+        {
+          "widget": {
+            "name": "sellers1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f2026c14",
+                  "fields": [
+                    {
+                      "name": "sum(sellers)",
+                      "expression": "SUM(`sellers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Sellers",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(sellers)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "active-sellers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f2026c14",
+                  "fields": [
+                    {
+                      "name": "sum(active_sellers)",
+                      "expression": "SUM(`active_sellers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Active sellers",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(active_sellers)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "activation-rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f2026c14",
+                  "fields": [
+                    {
+                      "name": "activation_rate",
+                      "expression": "`activation_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Activation rate",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "activation_rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "median-revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f2026c14",
+                  "fields": [
+                    {
+                      "name": "sum(median_revenue_active)",
+                      "expression": "SUM(`median_revenue_active`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Median 90-day revenue, active sellers (R$)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(median_revenue_active)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "activation-by-channel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9122c946",
+                  "fields": [
+                    {
+                      "name": "channel_group",
+                      "expression": "`channel_group`"
+                    },
+                    {
+                      "name": "activation_rate",
+                      "expression": "`activation_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Activation by channel",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "channel_group",
+                  "displayName": "Channel",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "activation_rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  },
+                  "displayName": "Activation rate",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "channel-detail",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "9122c946",
+                  "fields": [
+                    {
+                      "name": "channel_group",
+                      "expression": "`channel_group`"
+                    },
+                    {
+                      "name": "sellers",
+                      "expression": "`sellers`"
+                    },
+                    {
+                      "name": "active",
+                      "expression": "`active`"
+                    },
+                    {
+                      "name": "activation_rate",
+                      "expression": "`activation_rate`"
+                    },
+                    {
+                      "name": "ci_low",
+                      "expression": "`ci_low`"
+                    },
+                    {
+                      "name": "ci_high",
+                      "expression": "`ci_high`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Channel detail",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "channel_group",
+                    "displayName": "Channel"
+                  },
+                  {
+                    "fieldName": "sellers",
+                    "displayName": "Sellers"
+                  },
+                  {
+                    "fieldName": "active",
+                    "displayName": "Active"
+                  },
+                  {
+                    "fieldName": "activation_rate",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 1
+                      },
+                      "hideGroupSeparator": true
+                    },
+                    "displayName": "Activation Rate"
+                  },
+                  {
+                    "fieldName": "ci_low",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 1
+                      },
+                      "hideGroupSeparator": true
+                    },
+                    "displayName": "95% CI low"
+                  },
+                  {
+                    "fieldName": "ci_high",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 1
+                      },
+                      "hideGroupSeparator": true
+                    },
+                    "displayName": "95% CI high"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 4,
+            "width": 8,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "activation-by-lead-type",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d2d593f4",
+                  "fields": [
+                    {
+                      "name": "lead_type",
+                      "expression": "`lead_type`"
+                    },
+                    {
+                      "name": "activation_rate",
+                      "expression": "`activation_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Activation by lead type",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "lead_type",
+                  "displayName": "Lead type",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "activation_rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 1
+                    }
+                  },
+                  "displayName": "Activation rate",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 7,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "activation-business-type",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "28072d23",
+                  "fields": [
+                    {
+                      "name": "business_type",
+                      "expression": "`business_type`"
+                    },
+                    {
+                      "name": "activation_rate",
+                      "expression": "`activation_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Activation by business type",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "business_type",
+                  "displayName": "Business type",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "activation_rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  },
+                  "displayName": "Activation rate",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "median-revenue-by-channel",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f83149f2",
+                  "fields": [
+                    {
+                      "name": "channel_group",
+                      "expression": "`channel_group`"
+                    },
+                    {
+                      "name": "median_revenue",
+                      "expression": "`median_revenue`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Median 90-day revenue by channel (active sellers)",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "channel_group",
+                  "displayName": "Channel",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "median_revenue",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 0
+                    }
+                  },
+                  "displayName": "Median 90-day revenue (R$)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 9,
+            "width": 5,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "break-even",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d7fb643b",
+                  "fields": [
+                    {
+                      "name": "paid_cost_premium",
+                      "expression": "`paid_cost_premium`"
+                    },
+                    {
+                      "name": "paid_cost_per_active_vs_organic",
+                      "expression": "`paid_cost_per_active_vs_organic`"
+                    },
+                    {
+                      "name": "verdict",
+                      "expression": "`verdict`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": {
+                  "value": "Break-even\n<p>&nbsp;</p>\n",
+                  "fields": []
+                },
+                "description": {
+                  "value": "Paid search activates 1.41x as many sellers, so it can cost up to about 41% more per acquired seller before organic becomes cheaper per active seller (95% CI: 12% to 78%).\n<p>&nbsp;</p>\n",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "paid_cost_premium",
+                    "displayName": "Paid search cost premium over organic"
+                  },
+                  {
+                    "fieldName": "paid_cost_per_active_vs_organic",
+                    "displayName": "Paid cost per active seller (organic = 1.00)"
+                  },
+                  {
+                    "fieldName": "verdict",
+                    "displayName": "Verdict"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 15,
+            "width": 9,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "3ab86a30",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Seller Acquisition Channel Performance\n",
+                "\n",
+                "Olist sellers who signed by June 2, 2018 (667), measured over their first 90 days. **Paid search sellers are about 17 points more likely to start selling than organic search sellers; once active, sellers perform the same regardless of channel.**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "d66a1fbd",
+            "multilineTextboxSpec": {
+              "lines": [
+                "### Key findings\n",
+                "\n",
+                "- **Channel affects activation, not performance.** Paid search sellers activate at 54.8% vs. 38.9% for organic search (odds ratio 2.15 after controls, p = 0.001). Revenue, reviews, and delivery do not differ by channel.\n",
+                "- **Seller type matters more than channel.** Large online sellers activate at 62% vs. 25% for offline businesses; resellers at 49% vs. 32% for manufacturers.\n",
+                "- **Break-even:** paid search can cost up to about 41% more per acquired seller than organic and still match its cost per active seller (95% CI: 12% to 78%).\n",
+                "\n",
+                "### Caveats\n",
+                "\n",
+                "Observational data (sellers were not randomly assigned to channels). Small channels have wide confidence intervals. Revenue is highly skewed, so medians are shown. About a quarter of sellers have no recorded channel."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 21,
+            "width": 12,
+            "height": 4
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
